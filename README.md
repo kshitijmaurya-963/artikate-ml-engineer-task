@@ -7,7 +7,7 @@ This repository contains a complete solution for the Artikate Studio AI Engineer
 ### 1. Clone and create environment
 
 ```bash
-git clone <your-repo-url>.git
+git clone https://github.com/kshitijmaurya-963/artikate-ml-engineer-task
 python -m venv .venv
 source .venv/bin/activate  
 pip install -r requirements.txt
