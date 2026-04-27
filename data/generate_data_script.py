@@ -1,0 +1,284 @@
+import os, json
+from pathlib import Path
+
+base_dir = Path('data')
+base_dir.mkdir(exist_ok=True)
+
+train_path = base_dir / 'tickets_train.jsonl'
+eval_path = base_dir / 'tickets_eval.jsonl'
+
+# Helper to write jsonl
+
+def write_jsonl(path, records):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('w', encoding='utf-8') as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+
+
+# 1. Build training set: 200 examples per class (1000 total)
+
+months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
+billing_records = []
+
+for i, month in enumerate(months):
+    billing_records.append({
+        "text": f"I was charged twice for my subscription in {month}.",
+        "label": "billing",
+    })
+    billing_records.append({
+        "text": f"There is an unexplained fee on my {month} invoice.",
+        "label": "billing",
+    })
+    billing_records.append({
+        "text": f"Why did my card get billed after I cancelled in {month}?",
+        "label": "billing",
+    })
+    billing_records.append({
+        "text": f"The promo discount was not applied on my {month} payment.",
+        "label": "billing",
+    })
+
+# Add some additional patterns to reach 200
+while len(billing_records) < 200:
+    idx = len(billing_records)
+    billing_records.append({
+        "text": f"Please correct the overcharge on invoice #{1000+idx}.",
+        "label": "billing",
+    })
+
+
+technical_records = []
+
+error_codes = ["500", "404", "401", "503"]
+actions = [
+    "export", "login", "upload", "download", "reset password",
+    "generate report", "open dashboard", "save changes",
+]
+
+for code in error_codes:
+    for action in actions:
+        technical_records.append({
+            "text": f"I get a {code} error whenever I try to {action} in the app.",
+            "label": "technical_issue",
+        })
+
+extra_tech = [
+    "The mobile app crashes every time I open the settings screen.",
+    "The report page keeps loading forever and never finishes.",
+    "File uploads are stuck at 99 percent and never complete.",
+    "Search returns no results even for exact matches.",
+    "Push notifications are not working on my Android device.",
+]
+
+for t in extra_tech:
+    technical_records.append({"text": t, "label": "technical_issue"})
+
+technical_records = technical_records[:200]
+
+
+feature_records = []
+
+features = [
+    "dark mode for the web app",
+    "support for UPI payments",
+    "weekly scheduled email reports",
+    "custom user roles with fine-grained permissions",
+    "integration with Slack",
+    "bulk edit for multiple records",
+    "filters to search tickets by tags",
+    "export directly to Google Sheets",
+    "SSO with Azure AD",
+    "customizable email templates",
+]
+
+for i in range(20):
+    for ftr in features:
+        feature_records.append({
+            "text": f"Can you add {ftr} to the product?",
+            "label": "feature_request",
+        })
+
+feature_records = feature_records[:200]
+
+
+complaint_records = []
+
+complaints = [
+    "Your customer support never responds on time; this is unacceptable.",
+    "I am very unhappy with how slow the application has become.",
+    "The agent I spoke to was rude and did not solve my problem.",
+    "I keep reporting the same bug and nobody fixes it.",
+    "Your service went down during our peak hours and cost us business.",
+    "This is the third time my data has disappeared from the dashboard.",
+    "My issue was closed without any resolution, which is frustrating.",
+    "The new update made the interface much harder to use.",
+    "I feel cheated by how your pricing was communicated.",
+    "I am disappointed and considering switching to another vendor.",
+]
+
+for i in range(20):
+    for c in complaints:
+        complaint_records.append({
+            "text": c,
+            "label": "complaint",
+        })
+
+complaint_records = complaint_records[:200]
+
+
+other_records = []
+
+others = [
+    "Do you offer a reseller program for partners?",
+    "Can you share your data retention policy?",
+    "I want to know if you are compliant with ISO 27001.",
+    "How can I change the email address associated with my account?",
+    "What are your support hours on weekends?",
+    "Is there a way to download a copy of our contract?",
+    "Can you send me documentation on your API rate limits?",
+    "I would like to update the company name shown on our invoices.",
+    "How do I nominate an admin for our organization account?",
+    "Do you provide onboarding training for new teams?",
+]
+
+for i in range(20):
+    for o in others:
+        other_records.append({
+            "text": o,
+            "label": "other",
+        })
+
+other_records = other_records[:200]
+
+
+train_records = billing_records + technical_records + feature_records + complaint_records + other_records
+
+# 2. Build evaluation set: 20 per class, manually-curated style
+
+billing_eval = [
+    {"text": "My debit card was charged even though I cancelled before the trial ended.", "label": "billing"},
+    {"text": "There is an unexplained service fee added to my last invoice.", "label": "billing"},
+    {"text": "Why did my subscription price increase this month without any notice?", "label": "billing"},
+    {"text": "I need a refund for the extra user seat I removed last week.", "label": "billing"},
+    {"text": "The amount on the invoice does not match the quote we agreed to.", "label": "billing"},
+    {"text": "You billed me in USD instead of INR as shown during checkout.", "label": "billing"},
+    {"text": "Please correct the GST number printed on my invoice.", "label": "billing"},
+    {"text": "I was double charged when I updated my payment method.", "label": "billing"},
+    {"text": "Can you resend the invoice for March? I never received it.", "label": "billing"},
+    {"text": "The promo code discount was not applied and I paid full price.", "label": "billing"},
+    {"text": "I was billed for two workspaces after we merged our teams.", "label": "billing"},
+    {"text": "The invoice currency changed from EUR to USD without any notice.", "label": "billing"},
+    {"text": "Kindly waive the late payment fee due to a billing error.", "label": "billing"},
+    {"text": "I cancelled mid-month but I was still charged the full amount.", "label": "billing"},
+    {"text": "Our finance team needs separate invoices for each business unit.", "label": "billing"},
+    {"text": "I'm unable to download the PDF invoice from the billing portal.", "label": "billing"},
+    {"text": "Can you apply the nonprofit discount to our existing subscription?", "label": "billing"},
+    {"text": "The tax rate applied is incorrect for our region.", "label": "billing"},
+    {"text": "My card was declined but the order still shows as paid.", "label": "billing"},
+    {"text": "We were charged for extra API calls that we did not make.", "label": "billing"},
+]
+
+technical_eval = [
+    {"text": "The iOS app freezes when I try to open the settings page.", "label": "technical_issue"},
+    {"text": "I keep getting logged out every few minutes while working.", "label": "technical_issue"},
+    {"text": "Our webhook callbacks are failing with a 401 unauthorized error.", "label": "technical_issue"},
+    {"text": "The report export generates a corrupted XLSX file.", "label": "technical_issue"},
+    {"text": "When I change the date range, the chart does not update.", "label": "technical_issue"},
+    {"text": "I receive a network error message even on a stable connection.", "label": "technical_issue"},
+    {"text": "Two-factor authentication codes are not being delivered to my phone.", "label": "technical_issue"},
+    {"text": "The search bar returns no results even for exact matches.", "label": "technical_issue"},
+    {"text": "I cannot upload files larger than 5MB even though the limit is 50MB.", "label": "technical_issue"},
+    {"text": "The desktop app shows a blank white screen after login.", "label": "technical_issue"},
+    {"text": "The app logs me out whenever I switch networks.", "label": "technical_issue"},
+    {"text": "I am seeing duplicate entries in the transaction list after refresh.", "label": "technical_issue"},
+    {"text": "Our integration stopped working after your latest release.", "label": "technical_issue"},
+    {"text": "The email verification link opens to a 404 page.", "label": "technical_issue"},
+    {"text": "The mobile app does not sync data when offline.", "label": "technical_issue"},
+    {"text": "We are experiencing frequent timeouts when calling your API.", "label": "technical_issue"},
+    {"text": "The graphs show different numbers than the raw data table.", "label": "technical_issue"},
+    {"text": "I get a permission error when trying to invite new users.", "label": "technical_issue"},
+    {"text": "Our SSO login works on web but fails on mobile.", "label": "technical_issue"},
+    {"text": "After changing my email, I can no longer log in.", "label": "technical_issue"},
+]
+
+feature_eval = [
+    {"text": "It would be nice to have a Kanban board view for tasks.", "label": "feature_request"},
+    {"text": "Can you add an option to pause the subscription instead of cancelling?", "label": "feature_request"},
+    {"text": "We would like to customize the columns shown in the main table.", "label": "feature_request"},
+    {"text": "Please add support for multiple workspaces under one account.", "label": "feature_request"},
+    {"text": "Is it possible to have an API endpoint for bulk user creation?", "label": "feature_request"},
+    {"text": "I want to receive alerts in Microsoft Teams as well as email.", "label": "feature_request"},
+    {"text": "A sandbox environment for testing webhooks would be very helpful.", "label": "feature_request"},
+    {"text": "Can you add keyboard shortcuts for common actions?", "label": "feature_request"},
+    {"text": "We need a feature to archive old projects without deleting them.", "label": "feature_request"},
+    {"text": "It would be helpful to have a built-in tutorial for new users.", "label": "feature_request"},
+    {"text": "Please add an option to download reports as PDFs.", "label": "feature_request"},
+    {"text": "It would be useful to have IP whitelisting for security.", "label": "feature_request"},
+    {"text": "We want a feature to automatically tag tickets based on keywords.", "label": "feature_request"},
+    {"text": "Can you add a timeline view for activities within a project?", "label": "feature_request"},
+    {"text": "Our team would love native support for Hindi in the UI.", "label": "feature_request"},
+    {"text": "We need more granular notification settings per project.", "label": "feature_request"},
+    {"text": "Can the system send SMS alerts in addition to emails?", "label": "feature_request"},
+    {"text": "I would like to save custom views for my dashboards.", "label": "feature_request"},
+    {"text": "Is it possible to pin important tickets to the top of the list?", "label": "feature_request"},
+    {"text": "Please add a way to upload and manage custom fonts.", "label": "feature_request"},
+]
+
+complaint_eval = [
+    {"text": "I'm extremely disappointed with how this outage was handled.", "label": "complaint"},
+    {"text": "No one has replied to my ticket for three days.", "label": "complaint"},
+    {"text": "Your documentation is confusing and made the setup harder than it should be.", "label": "complaint"},
+    {"text": "The app is so slow during business hours that it's almost unusable.", "label": "complaint"},
+    {"text": "My previous complaint was closed without any explanation.", "label": "complaint"},
+    {"text": "I feel like you're ignoring enterprise customers like us.", "label": "complaint"},
+    {"text": "The recent UI changes have made our workflow much worse.", "label": "complaint"},
+    {"text": "I'm tired of reporting the same login issue over and over.", "label": "complaint"},
+    {"text": "Your agent promised a callback but nobody contacted me.", "label": "complaint"},
+    {"text": "The quality of your support has dropped significantly in the last few months.", "label": "complaint"},
+    {"text": "I'm upset that no one warned us before making breaking API changes.", "label": "complaint"},
+    {"text": "The chat support kept transferring me without resolving anything.", "label": "complaint"},
+    {"text": "I feel like my feedback is ignored despite multiple messages.", "label": "complaint"},
+    {"text": "Your product has too many bugs for a paid service.", "label": "complaint"},
+    {"text": "Our team wasted hours due to your unexpected downtime.", "label": "complaint"},
+    {"text": "I regret choosing your platform for our critical workflows.", "label": "complaint"},
+    {"text": "The tone of the last support email felt dismissive.", "label": "complaint"},
+    {"text": "I'm frustrated that the same problem keeps recurring after every update.", "label": "complaint"},
+    {"text": "The onboarding process was confusing and poorly documented.", "label": "complaint"},
+    {"text": "I am not happy with how long it takes to get any help.", "label": "complaint"},
+]
+
+other_eval = [
+    {"text": "Do you store customer data in the EU or in the US?", "label": "other"},
+    {"text": "How can I transfer ownership of this account to another colleague?", "label": "other"},
+    {"text": "Can you provide a copy of your DPIA for our records?", "label": "other"},
+    {"text": "I want to know if you offer discounts for educational institutions.", "label": "other"},
+    {"text": "What is the safest way to delete all our data from your systems?", "label": "other"},
+    {"text": "Please guide me through the process of closing our account.", "label": "other"},
+    {"text": "Do you have an uptime SLA for enterprise customers?", "label": "other"},
+    {"text": "How can I update our company logo that appears in emails?", "label": "other"},
+    {"text": "Can I invite external collaborators without giving them full access?", "label": "other"},
+    {"text": "Is there any way to migrate data from our old system into yours?", "label": "other"},
+    {"text": "How long do you retain logs for audit purposes?", "label": "other"},
+    {"text": "Do you offer any professional services to help with migration?", "label": "other"},
+    {"text": "Where can I download a copy of your latest security whitepaper?", "label": "other"},
+    {"text": "Can I change my plan from annual to monthly at the next renewal?", "label": "other"},
+    {"text": "Please confirm whether your data is encrypted at rest.", "label": "other"},
+    {"text": "How do I add a secondary email for notifications?", "label": "other"},
+    {"text": "What is the maximum number of users allowed on a single account?", "label": "other"},
+    {"text": "Can we get a demo of the enterprise features?", "label": "other"},
+    {"text": "Is there a way to see an audit log of all admin actions?", "label": "other"},
+    {"text": "I want to know how to export all our data before we cancel.", "label": "other"},
+]
+
+
+eval_records = billing_eval + technical_eval + feature_eval + complaint_eval + other_eval
+
+write_jsonl(train_path, train_records)
+write_jsonl(eval_path, eval_records)
+
+str(train_path), len(train_records), str(eval_path), len(eval_records)
